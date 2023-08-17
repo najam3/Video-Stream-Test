@@ -10,174 +10,160 @@ transports: ['websocket'], upgrade: false
 });
 
 function App() {
-  const myUserName = localStorage.getItem('user');
-  const [negotiate, setNegotiate] = useState(false)
-  const [videoOffer, setVideoOffer] = useState({});
-  const [videoAns, setVideoAnswer] = useState({});
-  const [newCandidate, setNewCandidate] = useState({});
-  const [calling, setCalling] = useState(false)
-  // const [users, setUsers] = useState([]);
-  const videoRef = useRef(null)
-  const recievedVideo = useRef(null)
+        const [offerDetails, setOfferDetails] = useState({})
+        const [answerDetails, setAnswerDetails] = useState({});
+        const [callee, setCallee] = useState('');
+        const localVideoRef = useRef(null);
+        const [me, setMe] = useState('');
+        const localPeer = useRef();
+        const [isCalling, setIsCalling] = useState(false);
+        const [isAnswered, setIsAnswered] = useState(false);
+        const candidates = useRef([]);
+        const recievedVideo = useRef();
+   
+        useState(() => {
 
-    let constraints = {
-    video:true,
-    audio:true
-  }
-
-      let myPeerConnection;
- 
-
-      const createPeerConnection = () => {
-        let servers = 
-        {
-          iceServers: 
-          [
-              {urls: 'stun:stun.l.google.com:19302'}
-          ]
-       }
-  
-        myPeerConnection = new RTCPeerConnection(servers);
-        myPeerConnection.onicecandidate = handleICECandidateEvent;
-        myPeerConnection.ontrack = handleTrackEvent;
-        myPeerConnection.onnegotiationneeded = handleNegotiationNeededEvent;
-      } 
-
-      const invite =  () => {
-         createPeerConnection();
-
-        navigator.mediaDevices.getUserMedia(constraints)
-        .then((streams) => {
-           const tracks = streams.getTracks();
-           tracks.forEach(track => {
-             myPeerConnection.addTrack(track, streams);
-           })
-             videoRef.current.srcObject = streams;
+        socket.on('connection-success', (user) => {
+          setMe(user)
         })
-        .catch((error) => {
-          console.log(`error: ${error}`)
-        })   
-      }
+
+        }, [])
+
+        const createPeerConnection = () => {
+          let servers = {
+            iceServers: [
+                {urls: 'stun:stun.l.google.com:19302'},
+                {urls: 'stun:stun1.l.google.com:19302'},
+                {urls: 'stun:stun.services.mozilla.com:3478'},
+                {urls: 'stun:stun.numb.viagenie.ca:3478'},
+                {urls: 'stun:resolver1.opendns.com:443'},
+                {urls: 'stun:stun.stunprotocol.org:3478'}
+            ]
+        };
+              localPeer.current = new RTCPeerConnection(servers);
+              localPeer.current.onicecandidate = handleICECandidateEvent;
+              localPeer.current.ontrack = handleTrackEvent;
+        }  
+      
 
 
-
-      async function handleNegotiationNeededEvent() {
-
-          myPeerConnection.createOffer()
-          .then(offer => {
-            myPeerConnection.setLocalDescription(offer)
-              .then(() => {
-                socket.emit('video-offer', {
-                  sender: myUserName,
-                  reciever: 'Subhan',
-                  sdp: myPeerConnection.localDescription 
-                 })     
-              })
+          const createOffer = () => {
+          setIsCalling(true);
+            localPeer.current.createOffer().then((sdp) => {
+              handleNewICECandidateMsg();
+            localPeer.current.setLocalDescription(sdp);
+            socket.emit('video-offer', {sdp: sdp, reciever: callee, sender: me})
           })
-          .catch((error) => {
-            console.log(`error ${error}`)
-          })
-      }
-
-      async function handleVideoOfferMsg() {
-        
-        let msg;
-        let localStream = null;
-        msg = videoOffer;
-       
-        createPeerConnection();
-        const description = new RTCSessionDescription(msg.sdp);
-  
-        myPeerConnection.setRemoteDescription(description)
-          .then(() => {
-            navigator.mediaDevices.getUserMedia(constraints)
-            .then((stream) => {
-              localStream = stream;
-              recievedVideo.current.srcObject = stream
-              localStream.getTracks()
-              .forEach((track) => {
-                myPeerConnection.addTrack(track, localStream)
-              });
-            })
-            .then(() => {
-              myPeerConnection.createAnswer()
-               .then((answer) => {
-                console.log(answer)
-                myPeerConnection.setLocalDescription(answer)
-               })
-               .then(() => {
-                socket.emit('video-answer', {
-                  sdp: myPeerConnection.localDescription,
-                  name: 'mukesh'
-                })
-               
-               })
-               .catch((error) => {
-                console.log(`error${error}`)
-               })
-            })
-          })
-          setCalling(true)
-      }
-
-      socket.on('offer', offer => {
-        setVideoOffer(offer);
-      })
-
-    
-
-      async function handleICECandidateEvent(event) {
-          if(event.candidate) {
-            socket.emit('new-ice-candidate', {
-              candidate: event.candidate
-            })
-            setCalling(true)
-          }
-      }
-           
-
-      function handleNewICECandidateMsg(newCandidate) {
-        
-          const candidate = new RTCIceCandidate( newCandidate );
-          
-          myPeerConnection.addIceCandidate(candidate)
-            .catch((error) => {
-              console.log(`error ${error}`)
-            })
-      }
-
-
-      socket.on('new-ice-candidate', recieved => {
-        // console.log('recieved', recieved)
-         setNewCandidate(recieved.candidate)
-     })
-     
-     
-        function handleTrackEvent(event) {
-
-          console.log(event.streams[0])
-          recievedVideo.current.srcObject = event.streams[0]
         }
 
-      // useEffect(() => {
+      const createAnswer = async () => {
+        createPeerConnection();
+        setIsAnswered(true);
+      const { sdp, receiver, sender } = offerDetails;
+    
+      try {
+        await localPeer.current.setRemoteDescription(new RTCSessionDescription(sdp));
+        navigator.mediaDevices.getUserMedia({audio:true, video:true}).then((stream) => {
+          stream.getTracks().forEach(track => localPeer.current.addTrack(track, stream));
+          }).catch((error) => console.log(`error: ${error}`))
 
-      //   const userJustVisited = prompt("Please Enter your Name...");
-      //   localStorage.setItem('users', userJustVisited);
-      // }, [])
-  return (
-    <>
-    <h1>Video Chat App</h1>
-    <video ref={videoRef}  playsInline autoPlay></video>
-    <video ref={recievedVideo} playsInline autoPlay></video>
-    <button onClick={invite}>Call</button>
-    {
-      calling ?
-      <Modal caller={videoOffer.sender} handleSubmit={() => {
-        handleVideoOfferMsg();
-        handleNewICECandidateMsg(newCandidate) 
-      }}/>
-      : ''
+          handleNewICECandidateMsg();
+        const answerSdp = await localPeer.current.createAnswer();
+        
+        await localPeer.current.setLocalDescription(answerSdp);
+    
+        socket.emit('video-answer', {
+          sdp: answerSdp,
+          receiver: receiver,
+          answering: sender,
+          status: 'accepted'
+        })
+      } catch (error) {
+        console.log(`Error creating answer: ${error}`);
+      }
+    };
+    
+     function handleICECandidateEvent(event) {
+      if(event.candidate) {
+        socket.emit('new-ice-candidate', {
+          candidate: event.candidate
+        })
+      }
+  }
+    
+
+   function handleNewICECandidateMsg() {
+    candidates.current.forEach(candidate => {
+      console.log(candidate)
+
+        const foundCandidate = new RTCIceCandidate(candidate.candidate);
+        localPeer.current.addIceCandidate(foundCandidate)
+          .catch((error) => {
+            // alert(`${error}`)
+            console.log(`error ${error}`)
+          })
+      })
     }
+
+        function handleTrackEvent(event) {
+          recievedVideo.current.srcObject = event.streams[0];
+        }
+
+              
+      useEffect(() => {
+        // Get the local media capibilities... 
+        createPeerConnection();
+        navigator.mediaDevices.getUserMedia({audio:true, video:true}).then((stream) => {
+        localVideoRef.current.srcObject = stream
+        stream.getTracks().forEach(track => localPeer.current.addTrack(track, stream));
+        }).catch((error) => console.log(`error: ${error}`))
+
+  
+      socket.on('new-ice-candidate', (data) => {
+        if(data) {
+          candidates.current = [...candidates.current, data]
+          // handleNewICECandidateMsg()
+        }
+      })
+
+
+      socket.on('video-offer', (offer) => {
+        if(offer) {
+          setOfferDetails(offer);
+          alert('Someone is Calling you!!')
+        }
+      })
+
+      socket.on('video-answer', (answer) => {
+        if(answer) {
+          setAnswerDetails(answer)
+          localPeer.current.setRemoteDescription(new RTCSessionDescription(answer.sdp))
+          // localPeer.current.setLocalDescription(answer.sdp);
+        }
+        // handleICECandidateEvent()
+    })
+
+
+}, [])
+
+return (
+    <>
+    <div>
+    <h1>Video Chat App</h1>
+    <video playsInline autoPlay ref={localVideoRef}></video>
+    <video playsInline autoPlay ref={recievedVideo}></video>
+    <div style={{display:'flex', gap:'2em'}}>
+      <input type="text" value={callee} onChange={(e) => setCallee(e.target.value)}/>
+      <button onClick={createOffer}>Call now</button>
+      <button onClick={createAnswer}>Answer the Call</button>
+      {/* <button onClick={handleNewICECandidateMsg}>Add Candidates</button> */}
+    </div>
+    </div>
+
+    <h1>{me.id}</h1>
+    
+  
+    
     </>
   )
 }

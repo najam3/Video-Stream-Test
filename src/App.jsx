@@ -5,9 +5,7 @@ import { io } from 'socket.io-client'
 import Modal from './component/Modal';
 
 
-const socket = io('http://127.0.0.1:3000', {
-transports: ['websocket'], upgrade: false
-});
+const socket = io('https://video-chat-application-8c72f4072331.herokuapp.com/');
 
 function App() {
         const [offerDetails, setOfferDetails] = useState({})
@@ -20,7 +18,7 @@ function App() {
         const [isAnswered, setIsAnswered] = useState(false);
         const candidates = useRef([]);
         const recievedVideo = useRef();
-   
+    
         const createPeerConnection = () => {
           let servers = {
             iceServers: [
@@ -122,6 +120,7 @@ function App() {
   
         socket.on('connection-success', (user) => {
           setMe(user)
+          console.log('user')
         })
 
 

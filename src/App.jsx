@@ -2,9 +2,10 @@
 // eslint-disable-next-line no-unused-vars
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client'
-import Modal from './component/Modal';
-
-
+import Modal from './component/BtModal';
+import Redesign from './component/Redesign';
+import useClipboard from 'react-use-clipboard';
+import VideoCallInviteToast from './component/BtModal';
 const socket = io('https://video-chat-application-8c72f4072331.herokuapp.com/');
 
 function App() {
@@ -18,7 +19,8 @@ function App() {
         const [isAnswered, setIsAnswered] = useState(false);
         const candidates = useRef([]);
         const recievedVideo = useRef();
-    
+        const [isCopied, setCopied] = useClipboard(me.id);
+        const [showToast, setShowToast] = useState(false);
         const createPeerConnection = () => {
           let servers = {
             iceServers: [
@@ -36,6 +38,14 @@ function App() {
         }  
       
  
+        const handleShowToast = () => {
+          setShowToast(true);
+        };
+      
+        const handleCloseToast = () => {
+          setShowToast(false);
+        };
+
 
           const createOffer = () => {
           setIsCalling(true);
@@ -55,8 +65,8 @@ function App() {
       try {
         // setRemoteDescription(sdp);
         // console.log(sdp)
-        await localPeer.current.setRemoteDescription(new RTCSessionDescription(sdp));
-       const answerSdp = await localPeer.current.createAnswer();
+   
+        const answerSdp = await localPeer.current.createAnswer();
          await localPeer.current.setLocalDescription(answerSdp);
     
         socket.emit('video-answer', {
@@ -67,9 +77,6 @@ function App() {
         })
 
       
-
-
-
         handleNewICECandidateMsg();
       } catch (error) {
         console.log(`Error creating answer: ${error}`);
@@ -108,7 +115,12 @@ function App() {
           recievedVideo.current.srcObject = event.streams[0];
         }
 
-              
+        function calleeId(e) {
+          setCallee(e.target.value)
+        }
+
+      
+        
       useEffect(() => {
         // Get the local media capibilities... 
         createPeerConnection()
@@ -120,7 +132,7 @@ function App() {
   
         socket.on('connection-success', (user) => {
           setMe(user)
-          console.log('user')
+      
         })
 
 
@@ -135,16 +147,16 @@ function App() {
         if(answer) {
           await localPeer.current.setRemoteDescription(new RTCSessionDescription(answer.sdp))
           handleNewICECandidateMsg()
-          alert('Call connected')
         }
       })
 
 
 
-      socket.on('video-offer', (offer) => {
+      socket.on('video-offer', async (offer) => {
         if(offer) {
+          await localPeer.current.setRemoteDescription(new RTCSessionDescription(offer.sdp));
           setOfferDetails(offer);
-          alert("Call recieving")
+          handleShowToast();
         }
       })
 }, [])
@@ -152,23 +164,36 @@ function App() {
 
 
 return (
-    <>
-    <div>
-    <h1>Video Chat App</h1>
-    <video playsInline autoPlay ref={localVideoRef}></video>
-    <video playsInline autoPlay ref={recievedVideo}></video>
-    <div style={{display:'flex', gap:'2em'}}>
-      <input type="text" value={callee} onChange={(e) => setCallee(e.target.value)}/>
-      <button onClick={createOffer}>Call now</button>
-      <button onClick={createAnswer}>Answer the Call</button>
-      {/* <button onClick={handleNewICECandidateMsg}>Add Candidates</button> */}
-    </div>
-    </div>
-
-    <h1>{me.id}</h1>
-    
   
-    
+    // {/* <div>
+    // <h1>Video Chat App</h1>
+    // <video playsInline autoPlay ref={localVideoRef}></video>
+    // <video playsInline autoPlay ref={recievedVideo}></video>
+    // <div style={{display:'flex', gap:'2em'}}>
+    //   <input type="text" value={callee} onChange={calleeId}/>
+    //   <button onClick={createOffer}>Call now</button>
+    //   <button onClick={createAnswer}>Answer the Call</button>
+    //   {/* <button onClick={handleNewICECandidateMsg}>Add Candidates</button> */}
+    // <h1>{me.id}</h1>
+    // </div>
+    // </div> */}
+
+    <>
+    <Redesign callee={callee} 
+    calleeId={calleeId} 
+    isCopied={isCopied} 
+    createAnswer={createAnswer}
+     createOffer={createOffer}
+    localRef={localVideoRef}
+    remoteRef={recievedVideo}
+    me={me}
+    copyHandler={setCopied}/>
+     
+     
+   <VideoCallInviteToast show={showToast} onClose={handleCloseToast} createAnswer={() => {
+    createAnswer()
+    handleCloseToast()
+   }}/>
     </>
   )
 }

@@ -21,14 +21,6 @@ function App() {
         const candidates = useRef([]);
         const recievedVideo = useRef();
    
-        useState(() => {
-
-        socket.on('connection-success', (user) => {
-          setMe(user)
-        })
-
-        }, [])
-
         const createPeerConnection = () => {
           let servers = {
             iceServers: [
@@ -45,32 +37,29 @@ function App() {
               localPeer.current.ontrack = handleTrackEvent;
         }  
       
-
+ 
 
           const createOffer = () => {
           setIsCalling(true);
             localPeer.current.createOffer().then((sdp) => {
-              handleNewICECandidateMsg();
+              
             localPeer.current.setLocalDescription(sdp);
             socket.emit('video-offer', {sdp: sdp, reciever: callee, sender: me})
+            handleNewICECandidateMsg();
           })
         }
 
       const createAnswer = async () => {
-        createPeerConnection();
+        
         setIsAnswered(true);
       const { sdp, receiver, sender } = offerDetails;
     
       try {
+        // setRemoteDescription(sdp);
+        // console.log(sdp)
         await localPeer.current.setRemoteDescription(new RTCSessionDescription(sdp));
-        navigator.mediaDevices.getUserMedia({audio:true, video:true}).then((stream) => {
-          stream.getTracks().forEach(track => localPeer.current.addTrack(track, stream));
-          }).catch((error) => console.log(`error: ${error}`))
-
-          handleNewICECandidateMsg();
-        const answerSdp = await localPeer.current.createAnswer();
-        
-        await localPeer.current.setLocalDescription(answerSdp);
+       const answerSdp = await localPeer.current.createAnswer();
+         await localPeer.current.setLocalDescription(answerSdp);
     
         socket.emit('video-answer', {
           sdp: answerSdp,
@@ -78,6 +67,12 @@ function App() {
           answering: sender,
           status: 'accepted'
         })
+
+      
+
+
+
+        handleNewICECandidateMsg();
       } catch (error) {
         console.log(`Error creating answer: ${error}`);
       }
@@ -91,60 +86,71 @@ function App() {
       }
   }
     
+  // async function setRemoteDescription(sdp) {
+  //   await localPeer.current.setRemoteDescription(new RTCSessionDescription(sdp))
+  // }
 
-   function handleNewICECandidateMsg() {
-    candidates.current.forEach(candidate => {
-      console.log(candidate)
 
-        const foundCandidate = new RTCIceCandidate(candidate.candidate);
-        localPeer.current.addIceCandidate(foundCandidate)
-          .catch((error) => {
-            // alert(`${error}`)
-            console.log(`error ${error}`)
-          })
-      })
-    }
+          function handleNewICECandidateMsg() {
+            candidates?.current.forEach(candidate => {
+              console.log(candidate)
+
+                const foundCandidate = new RTCIceCandidate(candidate.candidate);
+            
+                localPeer.current.addIceCandidate(foundCandidate)
+                  .catch((error) => {
+                    // alert(`${error}`)
+                    console.log(`error ${error}`)
+                  })
+              })
+            }
 
         function handleTrackEvent(event) {
+          if(recievedVideo.current.srcObject) return;
           recievedVideo.current.srcObject = event.streams[0];
         }
 
               
       useEffect(() => {
         // Get the local media capibilities... 
-        createPeerConnection();
+        createPeerConnection()
         navigator.mediaDevices.getUserMedia({audio:true, video:true}).then((stream) => {
         localVideoRef.current.srcObject = stream
         stream.getTracks().forEach(track => localPeer.current.addTrack(track, stream));
         }).catch((error) => console.log(`error: ${error}`))
 
   
+        socket.on('connection-success', (user) => {
+          setMe(user)
+        })
+
+
       socket.on('new-ice-candidate', (data) => {
         if(data) {
           candidates.current = [...candidates.current, data]
-          // handleNewICECandidateMsg()
+          handleNewICECandidateMsg();
         }
       })
+
+      socket.on('video-answer', async (answer) => {
+        if(answer) {
+          await localPeer.current.setRemoteDescription(new RTCSessionDescription(answer.sdp))
+          handleNewICECandidateMsg()
+          alert('Call connected')
+        }
+      })
+
 
 
       socket.on('video-offer', (offer) => {
         if(offer) {
           setOfferDetails(offer);
-          alert('Someone is Calling you!!')
+          alert("Call recieving")
         }
       })
-
-      socket.on('video-answer', (answer) => {
-        if(answer) {
-          setAnswerDetails(answer)
-          localPeer.current.setRemoteDescription(new RTCSessionDescription(answer.sdp))
-          // localPeer.current.setLocalDescription(answer.sdp);
-        }
-        // handleICECandidateEvent()
-    })
-
-
 }, [])
+
+
 
 return (
     <>
@@ -167,5 +173,9 @@ return (
     </>
   )
 }
+
+
+
+
 
 export default App

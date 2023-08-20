@@ -7,6 +7,9 @@ import Redesign from './component/Redesign';
 import useClipboard from 'react-use-clipboard';
 import VideoCallInviteToast from './component/BtModal';
 const socket = io('https://video-chat-application-8c72f4072331.herokuapp.com/');
+// const socket = io('http://localhost:3000', {
+//   transports: ['websocket']
+// });
 
 function App() {
         const [offerDetails, setOfferDetails] = useState({})
@@ -48,18 +51,17 @@ function App() {
 
 
           const createOffer = () => {
-          setIsCalling(true);
+          //  setIsCalling(true);
             localPeer.current.createOffer().then((sdp) => {
-              
             localPeer.current.setLocalDescription(sdp);
             socket.emit('video-offer', {sdp: sdp, reciever: callee, sender: me})
-            handleNewICECandidateMsg();
+            // handleNewICECandidateMsg();
           })
         }
 
       const createAnswer = async () => {
         
-        setIsAnswered(true);
+        // setIsAnswered(true);
       const { sdp, receiver, sender } = offerDetails;
     
       try {
@@ -77,7 +79,7 @@ function App() {
         })
 
       
-        handleNewICECandidateMsg();
+        // handleNewICECandidateMsg();
       } catch (error) {
         console.log(`Error creating answer: ${error}`);
       }
@@ -137,9 +139,9 @@ function App() {
 
 
       socket.on('new-ice-candidate', (data) => {
-        if(data) {
+        if(data && offerDetails) {
           candidates.current = [...candidates.current, data]
-          handleNewICECandidateMsg();
+          // handleNewICECandidateMsg();
         }
       })
 
@@ -164,21 +166,7 @@ function App() {
 
 
 return (
-  
-    // {/* <div>
-    // <h1>Video Chat App</h1>
-    // <video playsInline autoPlay ref={localVideoRef}></video>
-    // <video playsInline autoPlay ref={recievedVideo}></video>
-    // <div style={{display:'flex', gap:'2em'}}>
-    //   <input type="text" value={callee} onChange={calleeId}/>
-    //   <button onClick={createOffer}>Call now</button>
-    //   <button onClick={createAnswer}>Answer the Call</button>
-    //   {/* <button onClick={handleNewICECandidateMsg}>Add Candidates</button> */}
-    // <h1>{me.id}</h1>
-    // </div>
-    // </div> */}
-
-    <>
+  <>
     <Redesign callee={callee} 
     calleeId={calleeId} 
     isCopied={isCopied} 

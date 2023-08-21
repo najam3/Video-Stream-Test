@@ -2,7 +2,6 @@
 // eslint-disable-next-line no-unused-vars
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client'
-import Modal from './component/BtModal';
 import Redesign from './component/Redesign';
 import useClipboard from 'react-use-clipboard';
 import VideoCallInviteToast from './component/BtModal';
@@ -18,12 +17,11 @@ function App() {
         const localVideoRef = useRef(null);
         const [me, setMe] = useState('');
         const localPeer = useRef();
-        const [isCalling, setIsCalling] = useState(false);
-        const [isAnswered, setIsAnswered] = useState(false);
         const candidates = useRef([]);
         const recievedVideo = useRef();
         const [isCopied, setCopied] = useClipboard(me.id);
         const [showToast, setShowToast] = useState(false);
+        const [connected,setConnected] = useState(false);
         const createPeerConnection = () => {
           let servers = {
             iceServers: [
@@ -38,6 +36,7 @@ function App() {
               localPeer.current = new RTCPeerConnection(servers);
               localPeer.current.onicecandidate = handleICECandidateEvent;
               localPeer.current.ontrack = handleTrackEvent;
+           
         }  
       
  
@@ -51,59 +50,46 @@ function App() {
 
 
           const createOffer = () => {
-          //  setIsCalling(true);
             localPeer.current.createOffer().then((sdp) => {
             localPeer.current.setLocalDescription(sdp);
             socket.emit('video-offer', {sdp: sdp, reciever: callee, sender: me})
-            // handleNewICECandidateMsg();
           })
         }
 
       const createAnswer = async () => {
-        
-        // setIsAnswered(true);
       const { sdp, receiver, sender } = offerDetails;
-    
-      try {
-        // setRemoteDescription(sdp);
-        // console.log(sdp)
-   
-        const answerSdp = await localPeer.current.createAnswer();
-         await localPeer.current.setLocalDescription(answerSdp);
-    
-        socket.emit('video-answer', {
-          sdp: answerSdp,
-          receiver: receiver,
-          answering: sender,
-          status: 'accepted'
-        })
 
-      
-        // handleNewICECandidateMsg();
-      } catch (error) {
-        console.log(`Error creating answer: ${error}`);
-      }
-    };
+      try {
+            // createPeerConnection();
+           await localPeer.current.setRemoteDescription(new RTCSessionDescription(sdp));
+           const answerSdp = await localPeer.current.createAnswer();
+           await localPeer.current.setLocalDescription(answerSdp);
+           handleNewICECandidateMsg()
+              socket.emit('video-answer', {
+              sdp: answerSdp,
+              receiver: receiver,
+              answering: sender,
+              status: 'accepted'
+        })
+      } 
+      catch (error) {
+            console.log(`Error creating answer: ${error}`);
+        }
+      };
     
      function handleICECandidateEvent(event) {
-      if(event.candidate) {
-        socket.emit('new-ice-candidate', {
+       if(event.candidate) {
+          socket.emit('new-ice-candidate', {
           candidate: event.candidate
         })
+        }
       }
-  }
     
-  // async function setRemoteDescription(sdp) {
-  //   await localPeer.current.setRemoteDescription(new RTCSessionDescription(sdp))
-  // }
 
 
           function handleNewICECandidateMsg() {
             candidates?.current.forEach(candidate => {
-              console.log(candidate)
-
                 const foundCandidate = new RTCIceCandidate(candidate.candidate);
-            
                 localPeer.current.addIceCandidate(foundCandidate)
                   .catch((error) => {
                     // alert(`${error}`)
@@ -121,7 +107,9 @@ function App() {
           setCallee(e.target.value)
         }
 
-      
+     async function handleVideoAnswer(answer) {
+        await localPeer.current.setRemoteDescription(new RTCSessionDescription(answer));
+      }
         
       useEffect(() => {
         // Get the local media capibilities... 
@@ -134,31 +122,28 @@ function App() {
   
         socket.on('connection-success', (user) => {
           setMe(user)
-      
+        })
+
+
+        socket.on('video-answer',  (answer) => {
+               setAnswerDetails(answer)
+               handleVideoAnswer(answer.sdp)
+               handleNewICECandidateMsg();
         })
 
 
       socket.on('new-ice-candidate', (data) => {
-        if(data && offerDetails) {
+        if(data) {
           candidates.current = [...candidates.current, data]
-          // handleNewICECandidateMsg();
         }
       })
-
-      socket.on('video-answer', async (answer) => {
-        if(answer) {
-          await localPeer.current.setRemoteDescription(new RTCSessionDescription(answer.sdp))
-          handleNewICECandidateMsg()
-        }
-      })
-
 
 
       socket.on('video-offer', async (offer) => {
         if(offer) {
-          await localPeer.current.setRemoteDescription(new RTCSessionDescription(offer.sdp));
           setOfferDetails(offer);
           handleShowToast();
+         
         }
       })
 }, [])
@@ -180,6 +165,7 @@ return (
      
    <VideoCallInviteToast show={showToast} onClose={handleCloseToast} createAnswer={() => {
     createAnswer()
+    
     handleCloseToast()
    }}/>
     </>
